@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Env Switcher — Environnements</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Environnements</h1>
+      <p class="intro">
+        L'extension s'active sur les pages dont l'hôte correspond à l'un de ces environnements.
+        En changeant d'environnement, le chemin, les paramètres et l'ancre de la page sont conservés.
+        Glisse les lignes (ou utilise ↑ ↓) pour les ordonner ; l'ordre est celui du popup et des raccourcis 1–9.
+      </p>
+    </header>
+
+    <div class="table" role="table" aria-label="Environnements">
+      <div class="row head" role="row">
+        <span></span>
+        <span role="columnheader">Couleur</span>
+        <span role="columnheader">Nom</span>
+        <span role="columnheader">Badge</span>
+        <span role="columnheader">URL / hostname</span>
+        <span></span>
+      </div>
+      <div id="rows"></div>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="add" class="primary">+ Ajouter un environnement</button>
+      <span class="status" id="status" aria-live="polite"></span>
+    </div>
+
+    <section class="tools">
+      <h2>Préférences</h2>
+      <label class="pref">
+        <input type="checkbox" id="pref-new-tab">
+        Ouvrir l'environnement choisi dans un nouvel onglet
+      </label>
+      <p class="pref-hint">⌘/Ctrl+clic fait toujours l'inverse du comportement choisi.</p>
+    </section>
+
+    <section class="tools">
+      <h2>Partage &amp; sauvegarde</h2>
+      <p>Exporte la configuration en JSON pour la partager avec l'équipe, ou importe celle d'un collègue.</p>
+      <div class="buttons">
+        <button type="button" id="export">Exporter</button>
+        <button type="button" id="import">Importer…</button>
+        <input type="file" id="import-file" accept="application/json,.json" hidden>
+        <button type="button" id="reset" class="danger">Réinitialiser</button>
+      </div>
+    </section>
+  </main>
+
+  <template id="row-template">
+    <div class="row" role="row" draggable="true">
+      <span class="handle" title="Glisser pour réordonner" aria-hidden="true">⠿</span>
+      <input type="color" class="f-color" aria-label="Couleur">
+      <input type="text" class="f-name" placeholder="Recette 1" aria-label="Nom">
+      <input type="text" class="f-short" placeholder="R1" maxlength="4" aria-label="Badge (4 caractères max)">
+      <input type="text" class="f-url" placeholder="https://recette1.exemple.fr" aria-label="URL ou hostname" spellcheck="false">
+      <span class="row-actions">
+        <button type="button" class="up" title="Monter">↑</button>
+        <button type="button" class="down" title="Descendre">↓</button>
+        <button type="button" class="delete" title="Supprimer">✕</button>
+      </span>
+    </div>
+  </template>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

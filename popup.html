@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Env Switcher</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="current" id="current"></div>
+    <div class="path" id="path"></div>
+  </header>
+
+  <ul class="envs" id="envs"></ul>
+
+  <div class="unknown" id="unknown" hidden>
+    <p>Cette page ne correspond à aucun environnement configuré.</p>
+    <button type="button" id="add-current" class="secondary"></button>
+  </div>
+
+  <footer>
+    <span class="hint" id="hint"></span>
+    <button type="button" id="settings" class="link">Gérer les environnements</button>
+  </footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
