@@ -17,10 +17,9 @@ function dot(color) {
   return el;
 }
 
-async function go(tab, env, inNewTab) {
-  const url = buildTargetUrl(tab.url, env);
-  if (inNewTab) {
-    await chrome.tabs.create({ url, index: tab.index + 1, openerTabId: tab.id });
+async function go(tab, url, inNewTab) {
+  if (inNewTab || !tab) {
+    await chrome.tabs.create({ url, ...(tab ? { index: tab.index + 1, openerTabId: tab.id } : {}) });
   } else {
     await chrome.tabs.update(tab.id, { url });
   }
@@ -44,13 +43,16 @@ async function init() {
     window.close();
   });
 
+  // On a known env, keep the same path; otherwise open the env's home page.
+  const targetFor = (env) => current ? buildTargetUrl(tab.url, env) : `${env.url}/`;
+
   if (!current) {
     $("current").textContent = "Aucun environnement";
     let page;
     try { page = new URL(tab.url); } catch {}
     $("path").textContent = page ? page.host : "";
-    $("unknown").hidden = false;
     if (page && /^https?:$/.test(page.protocol)) {
+      $("unknown").hidden = false;
       $("add-current").textContent = `Ajouter ${page.host}`;
       $("add-current").addEventListener("click", async () => {
         envs.push({ id: newId(), name: page.hostname, url: page.origin, short: "", color: "#6b7280" });
@@ -58,20 +60,17 @@ async function init() {
         chrome.runtime.openOptionsPage();
         window.close();
       });
-    } else {
-      $("add-current").hidden = true;
     }
-    return;
+  } else {
+    const page = new URL(tab.url);
+    $("current").append(dot(current.color), document.createTextNode(current.name));
+    $("path").textContent = page.pathname + page.search + page.hash;
+    $("path").title = $("path").textContent;
   }
-
-  const page = new URL(tab.url);
-  $("current").append(dot(current.color), document.createTextNode(current.name));
-  $("path").textContent = page.pathname + page.search + page.hash;
-  $("path").title = $("path").textContent;
 
   const list = $("envs");
   envs.forEach((env, index) => {
-    const isCurrent = env.id === current.id;
+    const isCurrent = env.id === current?.id;
     const li = document.createElement("li");
 
     const btn = document.createElement("button");
@@ -104,9 +103,9 @@ async function init() {
     li.append(btn);
 
     if (!isCurrent) {
-      btn.title = buildTargetUrl(tab.url, env);
-      btn.addEventListener("click", (e) => go(tab, env, wantsNewTab(e.metaKey || e.ctrlKey)));
-      btn.addEventListener("auxclick", (e) => { if (e.button === 1) go(tab, env, true); });
+      btn.title = targetFor(env);
+      btn.addEventListener("click", (e) => go(tab, targetFor(env), wantsNewTab(e.metaKey || e.ctrlKey)));
+      btn.addEventListener("auxclick", (e) => { if (e.button === 1) go(tab, targetFor(env), true); });
 
       // Secondary button: the opposite of the default behaviour.
       const alt = document.createElement("button");
@@ -114,7 +113,7 @@ async function init() {
       alt.className = "newtab";
       alt.title = openInNewTab ? "Ouvrir dans cet onglet" : "Ouvrir dans un nouvel onglet";
       alt.textContent = openInNewTab ? "↩" : "↗";
-      alt.addEventListener("click", () => go(tab, env, !openInNewTab));
+      alt.addEventListener("click", () => go(tab, targetFor(env), !openInNewTab));
       li.append(alt);
     } else {
       btn.disabled = true;
@@ -129,7 +128,7 @@ async function init() {
     const match = /^(?:Digit|Numpad)([1-9])$/.exec(e.code);
     if (!match) return;
     const env = envs[Number(match[1]) - 1];
-    if (env && env.id !== current.id) go(tab, env, wantsNewTab(e.metaKey || e.ctrlKey));
+    if (env && env.id !== current?.id) go(tab, targetFor(env), wantsNewTab(e.metaKey || e.ctrlKey));
   });
 
   list.querySelector(".env:not(.is-current)")?.focus();
