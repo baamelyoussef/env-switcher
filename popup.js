@@ -4,6 +4,7 @@ const POPUP_RECHECK_MS = 15000;
 
 function setStatus(el, env, up) {
   el.className = "status " + (up ? "is-up" : "is-down");
+  el.dataset.label = up ? "en ligne" : "hors ligne";
   el.title = (up ? `En ligne — ${env.url}` : `Hors ligne — ${env.url}`) +
     ` · vérifié à ${new Date().toLocaleTimeString()}`;
 }
@@ -94,6 +95,7 @@ async function init() {
 
     const status = document.createElement("span");
     status.className = "status is-checking";
+    status.dataset.label = "vérification…";
     status.title = "Vérification en cours";
     const recheck = () => checkStatus(env.url).then((up) => setStatus(status, env, up));
     recheck();
