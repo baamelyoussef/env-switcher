@@ -1,4 +1,8 @@
-import { DEFAULT_ENVS, getEnvs, saveEnvs, onEnvsChanged, normalizeOrigin, newId, getSettings, saveSettings } from "./envs.js";
+import { DEFAULT_ENVS, getEnvs, saveEnvs, onEnvsChanged, normalizeOrigin, newId, getSettings, saveSettings, ENV_TYPES, buildEnvUrl } from "./envs.js";
+
+const isTyped = (env) => Boolean(ENV_TYPES[env.type]?.domain);
+// Name/badge suggested from the type, e.g. "ap2" / "AP2".
+const autoName = (env) => isTyped(env) ? `${env.type}${ENV_TYPES[env.type].number === "none" ? "" : (env.num || "")}` : "";
 
 const $ = (id) => document.getElementById(id);
 const rowsEl = $("rows");
@@ -20,6 +24,14 @@ function validate(list) {
   const hosts = new Map();
   list.forEach((env, index) => {
     if (!env.name.trim()) errors.push({ index, field: "name", message: "Nom manquant" });
+    if (isTyped(env) && ENV_TYPES[env.type].number === "required" && !String(env.num || "").trim()) {
+      errors.push({ index, field: "num", message: `Numéro ${env.type} manquant` });
+      return;
+    }
+    if (isTyped(env) && !/^\d+$/.test(String(env.ocp ?? ENV_TYPES[env.type].ocp))) {
+      errors.push({ index, field: "ocp", message: "Numéro OCP invalide" });
+      return;
+    }
     const origin = normalizeOrigin(env.url);
     if (!origin) {
       errors.push({ index, field: "url", message: "URL invalide" });
@@ -33,13 +45,27 @@ function validate(list) {
 }
 
 function clean(list) {
-  return list.map((env) => ({
-    id: env.id || newId(),
-    name: env.name.trim(),
-    url: normalizeOrigin(env.url),
-    short: (env.short || "").trim().toUpperCase().slice(0, 4),
-    color: env.color || "#6b7280",
-  }));
+  return list.map((env) => {
+    const out = {
+      id: env.id || newId(),
+      name: env.name.trim(),
+      url: normalizeOrigin(env.url),
+      short: (env.short || "").trim().toUpperCase().slice(0, 4),
+      color: env.color || "#6b7280",
+    };
+    if (isTyped(env)) {
+      out.type = env.type;
+      if (ENV_TYPES[env.type].number !== "none" && String(env.num || "").trim()) out.num = String(env.num).trim();
+      out.ocp = Number(env.ocp ?? ENV_TYPES[env.type].ocp);
+    }
+    return out;
+  });
+}
+
+// Copies the optional type fields from an imported/stored object.
+function typeFields(env) {
+  if (!ENV_TYPES[env.type]?.domain) return {};
+  return { type: env.type, num: env.num != null ? String(env.num) : "", ocp: env.ocp ?? ENV_TYPES[env.type].ocp };
 }
 
 function showErrors(errors) {
@@ -94,6 +120,53 @@ function render() {
     f("name").value = env.name;
     f("short").value = env.short || "";
     f("url").value = env.url;
+
+    // Type / number / OCP: for typed envs the URL is computed and read-only.
+    const typeSel = f("type");
+    for (const [value, { label }] of Object.entries(ENV_TYPES)) {
+      typeSel.append(new Option(label, value));
+    }
+    const syncTypeUi = () => {
+      const e = envs[index];
+      const t = ENV_TYPES[e.type];
+      const typed = isTyped(e);
+      typeSel.value = typed ? e.type : "autre";
+      f("num").hidden = !typed || t.number === "none";
+      f("num").placeholder = t?.number === "optional" ? "(n°)" : "n°";
+      f("num").value = e.num || "";
+      f("ocp").closest(".ocp").hidden = !typed;
+      f("ocp").value = typed ? (e.ocp ?? t.ocp) : "";
+      f("url").readOnly = typed;
+      f("url").value = e.url || "";
+    };
+    // Recompute URL (and auto name/badge if the user didn't customise them).
+    const applyType = (mutate) => {
+      const e = envs[index];
+      const prevAuto = autoName(e);
+      mutate(e);
+      if (isTyped(e)) {
+        e.url = buildEnvUrl(e) || "";
+        const next = autoName(e);
+        if (!e.name.trim() || e.name === prevAuto) e.name = f("name").value = next;
+        if (!(e.short || "").trim() || e.short.toUpperCase() === prevAuto.toUpperCase().slice(0, 4)) {
+          e.short = f("short").value = next.toUpperCase().slice(0, 4);
+        }
+      }
+      syncTypeUi();
+      schedulePersist();
+    };
+    typeSel.addEventListener("change", () => applyType((e) => {
+      if (typeSel.value === "autre") {
+        delete e.type; delete e.num; delete e.ocp;
+      } else {
+        e.type = typeSel.value;
+        e.ocp = ENV_TYPES[e.type].ocp; // default OCP for this type, editable afterwards
+        if (ENV_TYPES[e.type].number === "none") e.num = "";
+      }
+    }));
+    f("num").addEventListener("input", (ev) => applyType((e) => { e.num = ev.target.value.trim(); }));
+    f("ocp").addEventListener("input", (ev) => applyType((e) => { e.ocp = ev.target.value.trim(); }));
+    syncTypeUi();
 
     for (const field of ["color", "name", "short", "url"]) {
       f(field).addEventListener("input", (e) => {
@@ -165,10 +238,10 @@ function setupDrag(row, index) {
 }
 
 $("add").addEventListener("click", () => {
-  envs.push({ id: newId(), name: "", url: "", short: "", color: "#6b7280" });
+  envs.push({ id: newId(), name: "", url: "", short: "", color: "#6b7280", type: "ap", num: "", ocp: ENV_TYPES.ap.ocp });
   render();
-  rowsEl.lastElementChild?.querySelector(".f-name").focus();
-  setStatus("Renseigne le nom et l'URL du nouvel environnement.");
+  rowsEl.lastElementChild?.querySelector(".f-num").focus();
+  setStatus("Choisis le type, le numéro et l'OCP du nouvel environnement.");
 });
 
 $("export").addEventListener("click", () => {
@@ -192,9 +265,10 @@ $("import-file").addEventListener("change", async (e) => {
     const imported = list.map((env) => ({
       id: env.id || newId(),
       name: String(env.name || ""),
-      url: String(env.url || env.hostname || ""),
+      url: String(buildEnvUrl(env) || env.url || env.hostname || ""),
       short: String(env.short || ""),
       color: String(env.color || "#6b7280"),
+      ...typeFields(env),
     }));
     const errors = validate(imported);
     if (errors.length) throw new Error(`ligne ${errors[0].index + 1} : ${errors[0].message}`);

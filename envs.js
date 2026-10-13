@@ -51,6 +51,29 @@ export function onEnvsChanged(callback) {
   });
 }
 
+// Environment types: the URL is built from the type, an optional number and the OCP.
+//   ap2     -> https://ap2.www.apps.ocp-1.pin.prd.mlb.nbyt.fr
+//   dev1    -> https://dev1.www.apps.ocp-1.pin.prd.mlb.nbyt.fr
+//   preprod -> https://preprod.www.apps.ocp-3.ocp.euw3r53.nbyt.fr
+// "autre" keeps a free URL.
+export const ENV_TYPES = {
+  ap:      { label: "ap",      number: "required", ocp: 1, domain: "pin.prd.mlb.nbyt.fr" },
+  dev:     { label: "dev",     number: "optional", ocp: 1, domain: "pin.prd.mlb.nbyt.fr" },
+  preprod: { label: "preprod", number: "none",     ocp: 3, domain: "ocp.euw3r53.nbyt.fr" },
+  staging: { label: "staging", number: "none",     ocp: 3, domain: "ocp.euw3r53.nbyt.fr" },
+  autre:   { label: "Autre (URL libre)" },
+};
+
+// Returns the origin for a typed env, or null if the type is "autre"/unknown or incomplete.
+export function buildEnvUrl({ type, num, ocp }) {
+  const t = ENV_TYPES[type];
+  if (!t || !t.domain) return null;
+  const n = t.number === "none" ? "" : String(num ?? "").trim();
+  if (t.number === "required" && !n) return null;
+  const o = String(ocp ?? "").trim() || t.ocp;
+  return `https://${type}${n}.www.apps.ocp-${o}.${t.domain}`;
+}
+
 // Reachability check: any HTTP response (even opaque/no-cors) means the server
 // is up; a network error (DNS, refused, TLS) or timeout means it is down.
 export async function checkStatus(url, timeout = 5000) {
