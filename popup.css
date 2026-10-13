@@ -91,6 +91,22 @@ header {
   border-radius: 999px;
   padding: 0 6px;
 }
+.env .status {
+  flex: none;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.env .status.is-up { color: #15803d; background: rgba(22, 163, 74, .12); border-color: transparent; }
+.env .status.is-down { color: #b42318; background: rgba(217, 45, 32, .12); border-color: transparent; }
+@media (prefers-color-scheme: dark) {
+  .env .status.is-up { color: #4ade80; }
+  .env .status.is-down { color: #f97066; }
+}
 .newtab {
   border: 0;
   background: none;

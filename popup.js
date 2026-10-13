@@ -1,4 +1,13 @@
-import { getEnvs, saveEnvs, findEnv, buildTargetUrl, newId, getSettings } from "./envs.js";
+import { getEnvs, saveEnvs, findEnv, buildTargetUrl, newId, getSettings, checkStatus } from "./envs.js";
+
+const POPUP_RECHECK_MS = 15000;
+
+function setStatus(el, env, up) {
+  el.className = "status " + (up ? "is-up" : "is-down");
+  el.textContent = up ? "en ligne" : "hors ligne";
+  el.title = (up ? `${env.url} répond` : `${env.url} ne répond pas`) +
+    ` · vérifié à ${new Date().toLocaleTimeString()}`;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,7 +94,15 @@ async function init() {
     host.textContent = new URL(env.url).host;
     label.append(name, host);
 
-    btn.append(key, dot(env.color), label);
+    const status = document.createElement("span");
+    status.className = "status is-checking";
+    status.textContent = "…";
+    status.title = "Vérification en cours";
+    const recheck = () => checkStatus(env.url).then((up) => setStatus(status, env, up));
+    recheck();
+    setInterval(recheck, POPUP_RECHECK_MS);
+
+    btn.append(key, dot(env.color), label, status);
     li.append(btn);
 
     if (!isCurrent) {

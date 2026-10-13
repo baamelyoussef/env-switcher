@@ -51,6 +51,21 @@ export function onEnvsChanged(callback) {
   });
 }
 
+// Reachability check: any HTTP response (even opaque/no-cors) means the server
+// is up; a network error (DNS, refused, TLS) or timeout means it is down.
+export async function checkStatus(url, timeout = 5000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    await fetch(url, { method: "HEAD", mode: "no-cors", cache: "no-store", credentials: "omit", signal: ctrl.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Matches on host (hostname + port), so http/https variants of the same env are recognised.
 export function findEnv(envs, pageUrl) {
   let host;
