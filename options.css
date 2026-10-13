@@ -85,10 +85,7 @@ input.invalid { border-color: var(--danger); outline-color: var(--danger); }
 .f-url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .url-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .url-cell .f-url { flex: 1; min-width: 0; }
-.url-cell .f-url[readonly] { color: var(--muted); border-style: dashed; }
 .url-cell .f-num { width: 44px; flex: none; }
-.url-cell .ocp { display: flex; align-items: center; gap: 2px; color: var(--muted); font-size: 12px; flex: none; }
-.url-cell .f-ocp { width: 36px; }
 .url-cell [hidden] { display: none; }
 select.f-type {
   flex: none;

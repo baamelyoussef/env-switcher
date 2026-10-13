@@ -1,6 +1,6 @@
-import { DEFAULT_ENVS, getEnvs, saveEnvs, onEnvsChanged, normalizeOrigin, newId, getSettings, saveSettings, ENV_TYPES, buildEnvUrl } from "./envs.js";
+import { DEFAULT_ENVS, getEnvs, saveEnvs, onEnvsChanged, normalizeOrigin, newId, getSettings, saveSettings, ENV_TYPES, buildEnvUrl, splitHost } from "./envs.js";
 
-const isTyped = (env) => Boolean(ENV_TYPES[env.type]?.domain);
+const isTyped = (env) => Boolean(ENV_TYPES[env.type]?.suffix);
 // Name/badge suggested from the type, e.g. "ap2" / "AP2".
 const autoName = (env) => isTyped(env) ? `${env.type}${ENV_TYPES[env.type].number === "none" ? "" : (env.num || "")}` : "";
 
@@ -28,10 +28,6 @@ function validate(list) {
       errors.push({ index, field: "num", message: `Numéro ${env.type} manquant` });
       return;
     }
-    if (isTyped(env) && !/^\d+$/.test(String(env.ocp ?? ENV_TYPES[env.type].ocp))) {
-      errors.push({ index, field: "ocp", message: "Numéro OCP invalide" });
-      return;
-    }
     const origin = normalizeOrigin(env.url);
     if (!origin) {
       errors.push({ index, field: "url", message: "URL invalide" });
@@ -56,7 +52,6 @@ function clean(list) {
     if (isTyped(env)) {
       out.type = env.type;
       if (ENV_TYPES[env.type].number !== "none" && String(env.num || "").trim()) out.num = String(env.num).trim();
-      out.ocp = Number(env.ocp ?? ENV_TYPES[env.type].ocp);
     }
     return out;
   });
@@ -64,8 +59,8 @@ function clean(list) {
 
 // Copies the optional type fields from an imported/stored object.
 function typeFields(env) {
-  if (!ENV_TYPES[env.type]?.domain) return {};
-  return { type: env.type, num: env.num != null ? String(env.num) : "", ocp: env.ocp ?? ENV_TYPES[env.type].ocp };
+  if (!ENV_TYPES[env.type]?.suffix) return {};
+  return { type: env.type, num: env.num != null ? String(env.num) : "" };
 }
 
 function showErrors(errors) {
@@ -121,7 +116,8 @@ function render() {
     f("short").value = env.short || "";
     f("url").value = env.url;
 
-    // Type / number / OCP: for typed envs the URL is computed and read-only.
+    // Type / number: only the first part of the host follows the type; the rest
+    // of the URL is prefilled with the type's default and stays editable.
     const typeSel = f("type");
     for (const [value, { label }] of Object.entries(ENV_TYPES)) {
       typeSel.append(new Option(label, value));
@@ -134,18 +130,21 @@ function render() {
       f("num").hidden = !typed || t.number === "none";
       f("num").placeholder = t?.number === "optional" ? "(n°)" : "n°";
       f("num").value = e.num || "";
-      f("ocp").closest(".ocp").hidden = !typed;
-      f("ocp").value = typed ? (e.ocp ?? t.ocp) : "";
-      f("url").readOnly = typed;
       f("url").value = e.url || "";
     };
-    // Recompute URL (and auto name/badge if the user didn't customise them).
+    // Rewrites the host prefix (and auto name/badge if the user didn't customise them).
     const applyType = (mutate) => {
       const e = envs[index];
       const prevAuto = autoName(e);
+      const prevType = e.type;
       mutate(e);
       if (isTyped(e)) {
-        e.url = buildEnvUrl(e) || "";
+        // Keep the user's suffix, unless it is still the previous type's default
+        // (e.g. ap -> preprod switches ocp-1… to ocp-3…).
+        const cur = splitHost(e.url);
+        const prevDefault = ENV_TYPES[prevType]?.suffix;
+        const base = !cur || !cur.suffix || cur.suffix === prevDefault ? "" : e.url;
+        e.url = buildEnvUrl(e, base);
         const next = autoName(e);
         if (!e.name.trim() || e.name === prevAuto) e.name = f("name").value = next;
         if (!(e.short || "").trim() || e.short.toUpperCase() === prevAuto.toUpperCase().slice(0, 4)) {
@@ -157,15 +156,13 @@ function render() {
     };
     typeSel.addEventListener("change", () => applyType((e) => {
       if (typeSel.value === "autre") {
-        delete e.type; delete e.num; delete e.ocp;
+        delete e.type; delete e.num;
       } else {
         e.type = typeSel.value;
-        e.ocp = ENV_TYPES[e.type].ocp; // default OCP for this type, editable afterwards
         if (ENV_TYPES[e.type].number === "none") e.num = "";
       }
     }));
     f("num").addEventListener("input", (ev) => applyType((e) => { e.num = ev.target.value.trim(); }));
-    f("ocp").addEventListener("input", (ev) => applyType((e) => { e.ocp = ev.target.value.trim(); }));
     syncTypeUi();
 
     for (const field of ["color", "name", "short", "url"]) {
@@ -238,10 +235,12 @@ function setupDrag(row, index) {
 }
 
 $("add").addEventListener("click", () => {
-  envs.push({ id: newId(), name: "", url: "", short: "", color: "#6b7280", type: "ap", num: "", ocp: ENV_TYPES.ap.ocp });
+  const env = { id: newId(), name: "", url: "", short: "", color: "#6b7280", type: "ap", num: "" };
+  env.url = buildEnvUrl(env, "");
+  envs.push(env);
   render();
   rowsEl.lastElementChild?.querySelector(".f-num").focus();
-  setStatus("Choisis le type, le numéro et l'OCP du nouvel environnement.");
+  setStatus("Choisis le type et le numéro ; le reste de l'URL est prérempli et modifiable.");
 });
 
 $("export").addEventListener("click", () => {
@@ -265,7 +264,7 @@ $("import-file").addEventListener("change", async (e) => {
     const imported = list.map((env) => ({
       id: env.id || newId(),
       name: String(env.name || ""),
-      url: String(buildEnvUrl(env) || env.url || env.hostname || ""),
+      url: String(env.url || env.hostname || buildEnvUrl(env, "") || ""),
       short: String(env.short || ""),
       color: String(env.color || "#6b7280"),
       ...typeFields(env),
